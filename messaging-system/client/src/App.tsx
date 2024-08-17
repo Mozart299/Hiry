@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ChatList from './components/ChatList';
 import ChatWindow from './components/ChatWindow';
+import axios from 'axios';
 
 interface Chat {
-  id: string; // Change this to string if you want to match the ChatWindowProps
+  id: string; // Ensure the id matches with the database
   name: string;
   lastMessage: string;
   time: string;
@@ -11,21 +12,35 @@ interface Chat {
   selected: boolean;
 }
 
-const mockChats: Chat[] = [
-  { id: "1", name: 'Claire', lastMessage: '2nd Hello, I wanted to know more about...', time: '2m ago', unread: true, selected: false },
-  { id: "2", name: 'Parik', lastMessage: '3rd Hello, I wanted to know more about...', time: '11 days ago', unread: false, selected: false },
-  { id: "3", name: 'Naina', lastMessage: '4th Hello, I wanted to know more about...', time: '11 days ago', unread: false, selected: false },
-  { id: "4", name: 'John', lastMessage: '5th Hello, I wanted to know more about...', time: '11 days ago', unread: false, selected: false },
-  { id: "5", name: 'Kristine', lastMessage: '4th Hello, I wanted to know more about...', time: '11 days ago', unread: false, selected: false },
-];
-
 function App() {
+  const [chats, setChats] = useState<Chat[]>([]);
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await axios.get('http://localhost:3000/api/users'); // Adjust this URL to your backend
+        const userList = response.data.map((user: any) => ({
+          id: user.id.toString(),
+          name: user.username,
+          lastMessage: 'No messages yet', // You can update this based on actual messages
+          time: 'Just now', // Modify this with actual timestamps from messages
+          unread: false, // Set this dynamically based on unread messages
+          selected: false,
+        }));
+        setChats(userList);
+      } catch (error) {
+        console.error('Error fetching users:', error);
+      }
+    };
+
+    fetchUsers();
+  }, []);
 
   return (
     <div className="flex h-screen bg-white">
-      <ChatList chats={mockChats} onSelectChat={setSelectedChat} selectedChat={selectedChat} />
-      <ChatWindow selectedChat={mockChats.find(chat => chat.id === selectedChat) || null} />
+      <ChatList chats={chats} onSelectChat={setSelectedChat} selectedChat={selectedChat} />
+      <ChatWindow selectedChat={chats.find(chat => chat.id === selectedChat) || null} />
     </div>
   );
 }

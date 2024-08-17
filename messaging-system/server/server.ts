@@ -7,7 +7,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import morgan from 'morgan';
 import routes from './routes';
-import { messages } from './schema'; // Import the correct table schema
+import { messages, users } from './schema';
 
 // Load environment variables
 dotenv.config();
@@ -16,7 +16,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: process.env.CORS_ORIGIN || 'http://localhost:5173', // Load from environment
+        origin: process.env.CORS_ORIGIN || 'http://localhost:5173', 
         methods: ['GET', 'POST'],
     },
 });
@@ -33,6 +33,32 @@ const pool = new Pool({
 });
 
 export const db = drizzle(pool);
+
+pool.connect()
+  .then(() => {
+    console.log('Connected to the PostgreSQL database successfully');
+  })
+  .catch((error) => {
+    console.error('Error connecting to the PostgreSQL database:', error);
+  });
+
+
+  app.get('/test-db', async (req, res) => {
+    try {
+      const result = await db.select().from(users).limit(1);
+      if (result.length > 0) {
+        res.status(200).send('Database connected and users table is accessible');
+      } else {
+        res.status(200).send('Database connected but no users found');
+      }
+    } catch (error) {
+      console.error('Database connection error:', error);
+      res.status(500).send('Database connection failed');
+    }
+  });
+
+  
+  
 
 // Socket.IO connection
 io.on('connection', (socket) => {

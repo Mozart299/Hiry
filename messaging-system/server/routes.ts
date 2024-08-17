@@ -35,6 +35,18 @@ router.post(
   }
 );
 
+// Get all users
+router.get('/users', async (req, res) => {
+    try {
+      const userList = await db.select().from(users).orderBy(users.createdAt);
+      res.json(userList);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Error fetching users' });
+    }
+  });
+  
+
 // Get messages between two users
 router.get(
     '/messages/:senderId/:receiverId',
