@@ -25,11 +25,11 @@ router.post(
 
     const { username, password } = req.body;
     try {
-      const hashedPassword = await bcrypt.hash(password, 10); // Hash the password
+      const hashedPassword = await bcrypt.hash(password, 10);
       const newUser = await db.insert(users).values({ username, password: hashedPassword }).returning();
       res.status(201).json(newUser[0]);
     } catch (error) {
-      console.error(error); // Log the error for debugging
+      console.error('Error creating user:', error);
       res.status(500).json({ error: 'Error creating user' });
     }
   }
@@ -41,11 +41,10 @@ router.get('/users', async (req, res) => {
       const userList = await db.select().from(users).orderBy(users.createdAt);
       res.json(userList);
     } catch (error) {
-      console.error(error);
+      console.error('Error fetching users:', error);
       res.status(500).json({ error: 'Error fetching users' });
     }
-  });
-  
+});
 
 // Get messages between two users
 router.get(
@@ -58,7 +57,6 @@ router.get(
         return res.status(400).json({ errors: errors.array() });
       }
   
-      // Destructure with type assertion
       const { senderId, receiverId } = req.params as MessageRequestParams;
   
       try {
@@ -74,7 +72,7 @@ router.get(
           .orderBy(messages.createdAt);
         res.json(messageList);
       } catch (error) {
-        console.error(error); // Log the error for debugging
+        console.error('Error fetching messages:', error);
         res.status(500).json({ error: 'Error fetching messages' });
       }
     }
@@ -92,13 +90,12 @@ router.put(
   
       const { messageIds } = req.body;
       try {
-        // Use the in method to mark multiple messages as read
         await db.update(messages)
             .set({ read: true })
             .where(inArray(messages.id, messageIds));
         res.sendStatus(200);
       } catch (error) {
-        console.error(error);
+        console.error('Error marking messages as read:', error);
         res.status(500).json({ error: 'Error marking messages as read' });
       }
     }

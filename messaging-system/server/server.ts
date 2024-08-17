@@ -4,9 +4,10 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { drizzle } from 'drizzle-orm/node-postgres';
+import { and, eq } from 'drizzle-orm';
 import { Pool } from 'pg';
 import morgan from 'morgan';
-import routes from './routes';
+import routes from './router';
 import { messages, users } from './schema';
 
 // Load environment variables
@@ -42,56 +43,69 @@ pool.connect()
     console.error('Error connecting to the PostgreSQL database:', error);
   });
 
-
-  app.get('/test-db', async (req, res) => {
+// Test database connection
+app.get('/test-db', async (req, res) => {
     try {
-      const result = await db.select().from(users).limit(1);
-      if (result.length > 0) {
-        res.status(200).send('Database connected and users table is accessible');
-      } else {
-        res.status(200).send('Database connected but no users found');
-      }
+        const result = await db.select().from(users).limit(1);
+        if (result.length > 0) {
+            res.status(200).send('Database connected and users table is accessible');
+        } else {
+            res.status(200).send('Database connected but no users found');
+        }
     } catch (error) {
-      console.error('Database connection error:', error);
-      res.status(500).send('Database connection failed');
+        console.error('Database connection error:', error);
+        res.status(500).send('Database connection failed');
     }
-  });
+});
 
-  
-  
+// Fetch messages between two users
+app.get('/api/messages/:senderId/:receiverId', async (req: Request, res: Response) => {
+    const { senderId, receiverId } = req.params;
+
+    try {
+        const messageList = await db.select().from(messages)
+            .where(
+                and(
+                    eq(messages.senderId, parseInt(senderId)),
+                    eq(messages.receiverId, parseInt(receiverId))
+                )
+            )
+            .orderBy(messages.createdAt);
+        
+        res.json(messageList);
+    } catch (error) {
+        console.error('Error fetching messages:', error);
+        res.status(500).json({ error: 'Error fetching messages' });
+    }
+});
 
 // Socket.IO connection
 io.on('connection', (socket) => {
     console.log(`A user connected: ${socket.id}`);
 
     // Handle incoming messages
-    socket.on('sendMessage', async (data: { text: string, senderId: number, receiverId?: number }) => {
-        const { text, senderId, receiverId } = data;
+socket.on('sendMessage', async (data: { text: string }) => {
+  const { text } = data;
 
-        try {
-            // Save the message to the database
-            const newMessage = await db.insert(messages).values({
-                content: text,
-                senderId, // Ensure senderId is a number
-                receiverId, // Ensure receiverId is a number or undefined
-                createdAt: new Date(),
-            });
+  try {
+      // Save the message to the database
+      await db.insert(messages).values({
+          content: text,
+          createdAt: new Date(),
+      });
 
-            // Send the message to the sender
-            socket.emit('message', { content: text, isSent: true });
+      // Emit the message to the sender
+      socket.emit('message', { content: text, isSent: true });
 
-            // Send the message to the receiver
-            if (receiverId) {
-                socket.to(receiverId.toString()).emit('message', { content: text, isSent: false });
-            }
-        } catch (error) {
-            console.error('Error saving message to the database:', error);
-        }
-    });
-
-
+      // Emit the message to the receiver
+      // You'll need to determine the receiverId based on the selected chat
+      // socket.to(receiverId.toString()).emit('message', { content: text, isSent: false });
+  } catch (error) {
+      console.error('Error saving message to the database:', error);
+  }
+});
     // Handle typing indicator
-    socket.on('typing', (data: { isTyping: boolean, receiverId?: string }) => {
+    socket.on('typing', (data: { isTyping: boolean, receiverId: string }) => {
         const { isTyping, receiverId } = data;
 
         // Broadcast typing status to the receiver

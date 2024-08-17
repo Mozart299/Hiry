@@ -8,16 +8,13 @@ interface Message {
     isSent: boolean;
 }
 
-interface ChatWindowProps {
-    selectedChat: {
-        id: string; 
-        name: string;
-    } | null;
+interface Chat {
+    id: string; 
+    name: string;
 }
 
-interface SocketIOEvent {
-    text: string;
-    isTyping: boolean;
+interface ChatWindowProps {
+    selectedChat: Chat | null; // Accept the entire chat object or null
 }
 
 const MessageComponent: React.FC<Message> = ({ content, isSent }) => (
@@ -32,8 +29,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ selectedChat }) => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputMessage, setInputMessage] = useState('');
     const [isTyping, setIsTyping] = useState(false);
-    const messagesEndRef = useRef<HTMLDivElement | null>(null); // Specify the type
-
+    const messagesEndRef = useRef<HTMLDivElement | null>(null); 
+    
     useEffect(() => {
         socket.on('message', (message: Message) => {
             setMessages((prevMessages) => [...prevMessages, message]);
@@ -56,8 +53,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ selectedChat }) => {
     const handleSendMessage = (e: React.FormEvent) => {
         e.preventDefault();
         if (inputMessage.trim() !== '') {
-            socket.emit('sendMessage', { text: inputMessage } as SocketIOEvent);
-            setMessages([...messages, { content: inputMessage, isSent: true }]);
+            // Emit the message to the server
+            socket.emit('sendMessage', { text: inputMessage });
+
+            // Clear the input field
             setInputMessage('');
         }
     };
@@ -70,11 +69,17 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ selectedChat }) => {
     return (
         <div className="flex-1 flex flex-col">
             <div className="bg-white border-b p-4 flex items-center">
-                <img src={`https://ui-avatars.com/api/?name=${selectedChat?.name}`} alt={selectedChat?.name} className="w-10 h-10 rounded-full mr-3" />
-                <div>
-                    <h2 className="font-semibold">{selectedChat?.name}</h2>
-                    {isTyping && <p className="text-sm text-gray-500">Typing...</p>}
-                </div>
+                {selectedChat ? (
+                    <>
+                        <img src={`https://ui-avatars.com/api/?name=${selectedChat.name}`} alt={selectedChat.name} className="w-10 h-10 rounded-full mr-3" />
+                        <div>
+                            <h2 className="font-semibold">{selectedChat.name}</h2>
+                            {isTyping && <p className="text-sm text-gray-500">Typing...</p>}
+                        </div>
+                    </>
+                ) : (
+                    <h2 className="font-semibold">Select a chat</h2>
+                )}
             </div>
             <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
                 {messages.map((message, index) => (
