@@ -81,45 +81,52 @@ app.get('/api/messages/:senderId/:receiverId', async (req: Request, res: Respons
 
 // Socket.IO connection
 io.on('connection', (socket) => {
-    console.log(`A user connected: ${socket.id}`);
+  console.log(`A user connected: ${socket.id}`);
 
-    // Handle incoming messages
-socket.on('sendMessage', async (data: { text: string }) => {
-  const { text } = data;
+  // Join a room when a user selects a chat
+  socket.on('joinChat', (chatId: string) => {
+      socket.join(chatId); // Join the chat room
+      console.log(`User ${socket.id} joined chat room: ${chatId}`);
+  });
 
-  try {
-      // Save the message to the database
-      await db.insert(messages).values({
-          content: text,
-          createdAt: new Date(),
-      });
+  // Handle incoming messages
+  socket.on('sendMessage', async (data: { text: string; senderId: number; receiverId: number }) => {
+      const { text, senderId, receiverId } = data;
 
-      // Emit the message to the sender
-      socket.emit('message', { content: text, isSent: true });
+      try {
+          // Save the message to the database
+          await db.insert(messages).values({
+              content: text,
+              senderId, // Store senderId
+              receiverId, // Store receiverId
+              createdAt: new Date(),
+          });
 
-      // Emit the message to the receiver
-      // You'll need to determine the receiverId based on the selected chat
-      // socket.to(receiverId.toString()).emit('message', { content: text, isSent: false });
-  } catch (error) {
-      console.error('Error saving message to the database:', error);
-  }
+          // Emit the message to the sender
+          socket.emit('message', { content: text, isSent: true });
+
+          // Emit the message to the receiver's room
+          socket.to(receiverId.toString()).emit('message', { content: text, isSent: false, senderId });
+      } catch (error) {
+          console.error('Error saving message to the database:', error);
+      }
+  });
+
+  // Handle typing indicator
+  socket.on('typing', (data: { isTyping: boolean, receiverId: string }) => {
+      const { isTyping, receiverId } = data;
+
+      // Broadcast typing status to the receiver's room
+      if (receiverId) {
+          socket.to(receiverId).emit('typing', { isTyping });
+      }
+  });
+
+  // Handle disconnect
+  socket.on('disconnect', () => {
+      console.log(`User disconnected: ${socket.id}`);
+  });
 });
-    // Handle typing indicator
-    socket.on('typing', (data: { isTyping: boolean, receiverId: string }) => {
-        const { isTyping, receiverId } = data;
-
-        // Broadcast typing status to the receiver
-        if (receiverId) {
-            socket.to(receiverId).emit('typing', { isTyping });
-        }
-    });
-
-    // Handle disconnect
-    socket.on('disconnect', () => {
-        console.log(`User disconnected: ${socket.id}`);
-    });
-});
-
 // Error handling middleware
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
     console.error(err.stack);
