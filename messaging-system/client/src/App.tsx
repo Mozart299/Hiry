@@ -19,7 +19,7 @@ function App() {
     const [chats, setChats] = useState<Chat[]>([]);
     const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
     const [messages, setMessages] = useState<any[]>([]);
-    const [currentUserId, setCurrentUserId] = useState<number>(1); // Simulate logged-in user
+    const [currentUserId, setCurrentUserId] = useState<number>(2); // Simulate logged-in user
 
     useEffect(() => {
         // Fetch users (chats) from the backend
