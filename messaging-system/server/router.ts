@@ -4,6 +4,7 @@ import { users, messages } from './schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import bcrypt from 'bcrypt';
 import { body, param, validationResult } from 'express-validator';
+import { Server } from 'socket.io';
 
 interface MessageRequestParams {
     senderId: string; 
@@ -101,4 +102,52 @@ router.put(
     }
 );
 
-export default router;
+// Handle real-time user status and messages (Socket.IO)
+const setupSocketHandlers = (io: Server) => {
+  io.on('connection', (socket) => {
+    console.log('A user connected:', socket.id);
+
+    // Handle joining a chat room
+    socket.on('joinChat', (chatId) => {
+      socket.join(chatId);
+      console.log(`User joined chat: ${chatId}`);
+    });
+
+    // Handle sending messages
+    socket.on('sendMessage', async (data) => {
+      const { senderId, receiverId, text } = data;
+      try {
+        const newMessage = await db.insert(messages).values({
+          content: text,
+          senderId: parseInt(senderId),
+          receiverId: parseInt(receiverId),
+          read: false,
+        }).returning();
+
+        // Emit the message to both sender and receiver
+        io.to(receiverId).emit('message', newMessage[0]);
+        socket.emit('message', newMessage[0]); // Emit to sender's own chat window
+      } catch (error) {
+        console.error('Error sending message:', error);
+      }
+    });
+
+    // Handle typing status
+    socket.on('typing', (data) => {
+      const { receiverId, isTyping } = data;
+      io.to(receiverId).emit('typing', { isTyping });
+    });
+
+    // Handle user status changes (online/offline)
+    socket.on('userStatus', (data) => {
+      const { userId, status } = data;
+      io.emit('userStatus', { userId, status });
+    });
+
+    socket.on('disconnect', () => {
+      console.log('User disconnected:', socket.id);
+    });
+  });
+};
+
+export { router, setupSocketHandlers };

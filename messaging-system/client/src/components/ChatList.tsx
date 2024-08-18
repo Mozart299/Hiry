@@ -10,8 +10,8 @@ interface Chat {
 
 interface ChatListProps {
     chats: Chat[];
-    onSelectChat: (chat: Chat) => void; // Updated to accept the entire chat object
-    selectedChat: Chat | null; // Updated to accept the entire chat object or null
+    onSelectChat: (chat: Chat) => void;
+    selectedChat: Chat | null;
 }
 
 const ChatList = ({ chats, onSelectChat, selectedChat }: ChatListProps) => {
@@ -35,8 +35,8 @@ const ChatList = ({ chats, onSelectChat, selectedChat }: ChatListProps) => {
                     <ChatListItem
                         key={chat.id}
                         {...chat}
-                        selected={selectedChat?.id === chat.id} // Compare IDs to determine selection
-                        onClick={() => onSelectChat(chat)} // Pass the entire chat object
+                        selected={selectedChat?.id === chat.id}
+                        onClick={() => onSelectChat(chat)}
                     />
                 ))}
             </div>

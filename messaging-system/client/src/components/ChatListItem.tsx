@@ -4,7 +4,7 @@ interface ChatListItemProps {
   time: string;
   unread: boolean;
   selected: boolean;
-  onClick: () => void; // Ensure the onClick prop is defined
+  onClick: () => void;
 }
 
 const ChatListItem: React.FC<ChatListItemProps> = ({
@@ -13,10 +13,10 @@ const ChatListItem: React.FC<ChatListItemProps> = ({
   time,
   unread,
   selected,
-  onClick, // Destructure onClick prop
+  onClick,
 }) => (
   <div 
-      onClick={onClick} // Attach the onClick handler
+      onClick={onClick}
       className={`flex items-center p-3 cursor-pointer ${selected ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
   >
       <img src={`https://ui-avatars.com/api/?name=${name}`} alt={name} className="w-10 h-10 rounded-full mr-3" />
