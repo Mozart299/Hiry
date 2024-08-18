@@ -1,136 +1,96 @@
-import express, { Request, Response, NextFunction } from 'express';
+import express, { Request, Response } from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { and, eq } from 'drizzle-orm';
 import { Pool } from 'pg';
-import morgan from 'morgan';
-import routes from './router';
-import { messages, users } from './schema';
+import { messages } from './schema'; // Import your messages schema
+import { and, eq } from 'drizzle-orm';
 
-// Load environment variables
 dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: process.env.CORS_ORIGIN || 'http://localhost:5173', 
+        origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
         methods: ['GET', 'POST'],
     },
 });
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(morgan('dev')); // HTTP request logging
-app.use('/api', routes);
-
-// Database connection
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
 });
 
 export const db = drizzle(pool);
 
-pool.connect()
-  .then(() => {
-    console.log('Connected to the PostgreSQL database successfully');
-  })
-  .catch((error) => {
-    console.error('Error connecting to the PostgreSQL database:', error);
-  });
-
-// Test database connection
-app.get('/test-db', async (req, res) => {
-    try {
-        const result = await db.select().from(users).limit(1);
-        if (result.length > 0) {
-            res.status(200).send('Database connected and users table is accessible');
-        } else {
-            res.status(200).send('Database connected but no users found');
-        }
-    } catch (error) {
-        console.error('Database connection error:', error);
-        res.status(500).send('Database connection failed');
-    }
-});
-
-// Fetch messages between two users
-app.get('/api/messages/:senderId/:receiverId', async (req: Request, res: Response) => {
-    const { senderId, receiverId } = req.params;
-
-    try {
-        const messageList = await db.select().from(messages)
-            .where(
-                and(
-                    eq(messages.senderId, parseInt(senderId)),
-                    eq(messages.receiverId, parseInt(receiverId))
-                )
-            )
-            .orderBy(messages.createdAt);
-        
-        res.json(messageList);
-    } catch (error) {
-        console.error('Error fetching messages:', error);
-        res.status(500).json({ error: 'Error fetching messages' });
-    }
-});
+const onlineUsers: { [key: string]: string } = {}; // Store user IDs and their socket IDs
 
 // Socket.IO connection
 io.on('connection', (socket) => {
-  console.log(`A user connected: ${socket.id}`);
+    console.log(`A user connected: ${socket.id}`);
 
-  // Join a room when a user selects a chat
-  socket.on('joinChat', (chatId: string) => {
-      socket.join(chatId); // Join the chat room
-      console.log(`User ${socket.id} joined chat room: ${chatId}`);
-  });
+    // Register user and notify others
+    socket.on('registerUser', (userId: string) => {
+        onlineUsers[userId] = socket.id;
+        io.emit('userStatus', { userId, status: 'online' });
+    });
 
-  // Handle incoming messages
-  socket.on('sendMessage', async (data: { text: string; senderId: number; receiverId: number }) => {
-      const { text, senderId, receiverId } = data;
+    // Join a room when a user selects a chat
+    socket.on('joinChat', (chatId: string) => {
+        socket.join(chatId);
+        console.log(`User ${socket.id} joined chat room: ${chatId}`);
+    });
 
-      try {
-          // Save the message to the database
-          await db.insert(messages).values({
-              content: text,
-              senderId, // Store senderId
-              receiverId, // Store receiverId
-              createdAt: new Date(),
-          });
+    // Handle incoming messages
+    socket.on('sendMessage', async (data: { text: string; senderId: number; receiverId: number }) => {
+        const { text, senderId, receiverId } = data;
 
-          // Emit the message to the sender
-          socket.emit('message', { content: text, isSent: true });
+        try {
+            // Save the message to the database
+            await db.insert(messages).values({
+                content: text,
+                senderId,
+                receiverId,
+                createdAt: new Date(),
+                read: false, // Set to false initially
+            });
 
-          // Emit the message to the receiver's room
-          socket.to(receiverId.toString()).emit('message', { content: text, isSent: false, senderId });
-      } catch (error) {
-          console.error('Error saving message to the database:', error);
-      }
-  });
+            // Emit the message to the sender
+            socket.emit('message', { content: text, isSent: true });
 
-  // Handle typing indicator
-  socket.on('typing', (data: { isTyping: boolean, receiverId: string }) => {
-      const { isTyping, receiverId } = data;
+            // Emit the message to the receiver's room
+            socket.to(receiverId.toString()).emit('message', { content: text, isSent: false, senderId });
+        } catch (error) {
+            console.error('Error saving message to the database:', error);
+        }
+    });
 
-      // Broadcast typing status to the receiver's room
-      if (receiverId) {
-          socket.to(receiverId).emit('typing', { isTyping });
-      }
-  });
+    // Mark messages as read
+    socket.on('readMessages', async (receiverId: number, senderId: number) => {
+        await db.update(messages)
+            .set({ read: true })
+            .where(and(eq(messages.senderId, senderId), eq(messages.receiverId, receiverId)));
+    });
 
-  // Handle disconnect
-  socket.on('disconnect', () => {
-      console.log(`User disconnected: ${socket.id}`);
-  });
-});
-// Error handling middleware
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-    console.error(err.stack);
-    res.status(500).send('Something went wrong!');
+    // Handle typing indicator
+    socket.on('typing', (data: { isTyping: boolean; receiverId: string }) => {
+        socket.to(data.receiverId).emit('typing', { isTyping: data.isTyping });
+    });
+
+    // Handle disconnect
+    socket.on('disconnect', () => {
+        // Remove user from online users
+        for (const userId in onlineUsers) {
+            if (onlineUsers[userId] === socket.id) {
+                delete onlineUsers[userId];
+                io.emit('userStatus', { userId, status: 'offline' });
+                break;
+            }
+        }
+        console.log(`User disconnected: ${socket.id}`);
+    });
 });
 
 const PORT = process.env.PORT || 3000;

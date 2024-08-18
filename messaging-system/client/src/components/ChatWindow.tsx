@@ -9,12 +9,12 @@ interface Message {
 }
 
 interface Chat {
-    id: string; // Ensure this matches the type used in your database
+    id: string;
     name: string;
 }
 
 interface ChatWindowProps {
-    selectedChat: Chat | null; // Accept the entire chat object or null
+    selectedChat: Chat | null;
     messages: Message[];
 }
 
@@ -31,15 +31,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ selectedChat }) => {
     const [inputMessage, setInputMessage] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement | null>(null);
-    const currentUserId = 2; // Replace with actual user ID logic
+    const currentUserId = 1; // Replace with actual user ID logic
 
     useEffect(() => {
-        // Listen for incoming messages
         socket.on('message', (message: Message) => {
             setMessages((prevMessages) => [...prevMessages, message]);
         });
 
-        // Listen for typing status
         socket.on('typing', (data: { isTyping: boolean }) => {
             setIsTyping(data.isTyping);
         });
@@ -54,38 +52,18 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ selectedChat }) => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
-    const fetchMessages = async (senderId: number, receiverId: string) => {
-        try {
-            const response = await fetch(`/api/messages/${senderId}/${receiverId}`);
-            const data = await response.json();
-            setMessages(data); // Store fetched messages in state
-        } catch (error) {
-            console.error('Error fetching messages:', error);
-        }
-    };
-
-    useEffect(() => {
-        if (selectedChat) {
-            // Join the chat room when a chat is selected
-            socket.emit('joinChat', selectedChat.id);
-            fetchMessages(currentUserId, selectedChat.id); // Fetch messages when chat is selected
-        }
-    }, [selectedChat]);
-
     const handleSendMessage = (e: React.FormEvent) => {
         e.preventDefault();
         if (inputMessage.trim() !== '') {
-            if (selectedChat) { // Check if selectedChat is not null
-                // Emit the message to the server
+            if (selectedChat) {
                 socket.emit('sendMessage', {
                     text: inputMessage,
-                    senderId: currentUserId, // Ensure this is set to the correct user ID
-                    receiverId: selectedChat.id // Access id only if selectedChat is not null
+                    senderId: currentUserId,
+                    receiverId: selectedChat.id,
                 });
-                setInputMessage(''); // Clear the input field
+                setInputMessage('');
             } else {
                 console.error("No chat selected.");
-                // Optionally, you can display a message to the user
             }
         }
     };
