@@ -52,30 +52,31 @@ app.post('/upload', upload.single('file'), (req, res) => {
 
 // Get messages with pagination
 app.get('/messages/:senderId/:receiverId', async (req: Request, res: Response) => {
-    const { senderId, receiverId } = req.params;
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
-    const offset = (page - 1) * limit;
+  const { senderId, receiverId } = req.params;
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 20;
+  const offset = (page - 1) * limit;
 
-    try {
-        const messageList = await db.select()
-            .from(messages)
-            .where(
-                or(
-                    and(eq(messages.senderId, parseInt(senderId)), eq(messages.receiverId, parseInt(receiverId))),
-                    and(eq(messages.senderId, parseInt(receiverId)), eq(messages.receiverId, parseInt(senderId)))
-                )
-            )
-            .orderBy(desc(messages.createdAt))
-            .limit(limit)
-            .offset(offset);
+  try {
+      const messageList = await db.select()
+          .from(messages)
+          .where(
+              or(
+                  and(eq(messages.senderId, parseInt(senderId)), eq(messages.receiverId, parseInt(receiverId))),
+                  and(eq(messages.senderId, parseInt(receiverId)), eq(messages.receiverId, parseInt(senderId)))
+              )
+          )
+          .orderBy(desc(messages.createdAt))
+          .limit(limit)
+          .offset(offset);
 
-        res.json(messageList.reverse());
-    } catch (error) {
-        console.error('Error fetching messages:', error);
-        res.status(500).json({ error: 'Error fetching messages' });
-    }
+      res.json({ messages: messageList.reverse() }); // Ensure it's sent as an array
+  } catch (error) {
+      console.error('Error fetching messages:', error);
+      res.status(500).json({ error: 'Error fetching messages' });
+  }
 });
+
 
 // Socket.IO connection
 io.on('connection', (socket) => {
